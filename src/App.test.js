@@ -1,55 +1,75 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import MapCard from './components/map-card';
 
-const normalizeColor = color => {
-  const style = document.createElement('div').style;
-  style.backgroundColor = color;
-  return style.backgroundColor;
-};
-
-const countCellsByColor = (cells, color) =>
-  cells.filter(cell => cell.style.backgroundColor === normalizeColor(color)).length;
+beforeEach(() => {
+  window.history.replaceState(null, '', '/?game=TESTBOARD');
+});
 
 afterEach(() => {
   jest.restoreAllMocks();
-  jest.useRealTimers();
 });
 
-test('starts with an enabled randomize control', () => {
+test('renders a complete playable board with valid role distribution', () => {
   render(<MapCard />);
 
-  expect(screen.getByRole('button', { name: 'Randomize' })).toBeEnabled();
+  const cards = screen.getAllByTestId('map-cell');
+  expect(cards).toHaveLength(25);
+
+  const roles = cards.map(card => card.dataset.role);
+  expect(roles.filter(role => role === 'assassin')).toHaveLength(1);
+  expect(roles.filter(role => role === 'neutral')).toHaveLength(7);
+  expect([
+    roles.filter(role => role === 'red').length,
+    roles.filter(role => role === 'blue').length,
+  ].sort()).toEqual([8, 9]);
+  expect(screen.getByText('TESTBOARD')).toBeVisible();
 });
 
-test('generates a valid 25-cell map and announces the starting team', async () => {
-  jest.useFakeTimers();
-  jest.spyOn(Math, 'random').mockReturnValue(0);
+test('reveals cards and updates the matching team score', () => {
+  render(<MapCard />);
+  const redCard = screen.getAllByTestId('map-cell').find(card => card.dataset.role === 'red');
+  expect(redCard).toBeDefined();
+
+  const initialRedScore = Number(screen.getByLabelText(/red agents remaining/i).querySelector('strong').textContent);
+  fireEvent.click(redCard);
+
+  expect(redCard).toBeDisabled();
+  expect(redCard).toHaveClass('revealed', 'red');
+  expect(screen.getByLabelText(`${initialRedScore - 1} red agents remaining`)).toBeVisible();
+});
+
+test('supports spymaster view and turn controls', () => {
   render(<MapCard />);
 
-  const randomizeButton = screen.getByRole('button', { name: 'Randomize' });
-  fireEvent.click(randomizeButton);
-  expect(randomizeButton).toBeDisabled();
+  const viewToggle = screen.getByRole('button', { name: 'Operative view' });
+  fireEvent.click(viewToggle);
+  expect(screen.getByRole('button', { name: 'Spymaster view' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getAllByTestId('map-cell')[0]).toHaveAccessibleName(/(agent|bystander|assassin)/i);
 
-  await act(async () => {
-    for (let shuffle = 0; shuffle < 6; shuffle += 1) {
-      jest.advanceTimersByTime(300);
-      await Promise.resolve();
-    }
-    jest.advanceTimersByTime(500);
-    await Promise.resolve();
-  });
+  const currentTurn = screen.getByText(/team’s turn/i).textContent;
+  fireEvent.change(screen.getByLabelText('Clue word'), { target: { value: 'Ocean' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Start clue' }));
+  fireEvent.click(screen.getByRole('button', { name: 'End turn' }));
+  expect(screen.getByText(/team’s turn/i).textContent).not.toBe(currentTurn);
+});
 
-  expect(randomizeButton).toBeEnabled();
-  expect(screen.getByRole('heading', { name: 'Red Starts' })).toBeVisible();
+test('ends the turn automatically after an incorrect guess', () => {
+  render(<MapCard />);
+  const currentTurn = screen.getByText(/team’s turn/i).textContent;
+  const activeRole = currentTurn.toLowerCase().includes('red') ? 'red' : 'blue';
+  const wrongCard = screen.getAllByTestId('map-cell').find(card =>
+    card.dataset.role !== activeRole && card.dataset.role !== 'assassin'
+  );
 
-  const cells = screen.getAllByTestId('map-cell');
-  expect(cells).toHaveLength(25);
-  expect(countCellsByColor(cells, '#111111')).toBe(1);
-  expect(countCellsByColor(cells, '#e6dfa7')).toBe(7);
+  fireEvent.click(wrongCard);
+  expect(screen.getByText(/team’s turn/i).textContent).not.toBe(currentTurn);
+});
 
-  const teamCounts = [
-    countCellsByColor(cells, '#dc4347'),
-    countCellsByColor(cells, '#3c83b1'),
-  ].sort();
-  expect(teamCounts).toEqual([8, 9]);
+test('accepts and displays a clue', () => {
+  render(<MapCard />);
+  fireEvent.change(screen.getByLabelText('Clue word'), { target: { value: 'Ocean' } });
+  fireEvent.change(screen.getByLabelText('Clue count'), { target: { value: '3' } });
+
+  expect(screen.getByText('Ocean')).toBeVisible();
+  expect(screen.getByLabelText('3 guesses')).toBeVisible();
 });
