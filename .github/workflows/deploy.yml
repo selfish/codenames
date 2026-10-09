@@ -14,6 +14,10 @@ on:
       - 'scripts/check_preview.py'
       - 'scripts/check_router.py'
       - 'tests/test_pages_preview.py'
+      - '.github/workflows/action-validation.yml'
+      - 'scripts/check_action_artifact.py'
+      - 'scripts/check_production_build.py'
+      - 'tests/test_production_build.py'
 
 permissions:
   contents: write
@@ -45,8 +49,11 @@ jobs:
         env:
           CI: true
 
+      - name: Reject collisions with preserved Pages content
+        run: python3 scripts/check_production_build.py build
+
       - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4.8.0
+        uses: JamesIves/github-pages-deploy-action@fa24774553152dd7873cd16ebd8d959b010c5445 # v4.9.0
         with:
           branch: gh-pages  # The branch the action should deploy to.
           clean-exclude: |
