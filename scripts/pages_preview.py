@@ -7,7 +7,10 @@ import shutil
 import subprocess
 import sys
 
-APPROVED = {14: "eb34cc11e28aba93d4bba286f2b79b090f4d820e"}
+APPROVED = {
+    14: "eb34cc11e28aba93d4bba286f2b79b090f4d820e",
+    18: "e95be1cc484bd335c5910528e58aba5628b71d09",
+}
 NOINDEX = '<meta name="robots" content="noindex, nofollow, noimageindex">'
 
 

@@ -1,6 +1,7 @@
 """Check the published preview over HTTPS from a desktop and mobile browser."""
 
 import json
+import os
 from pathlib import Path
 import shutil
 import time
@@ -8,8 +9,9 @@ from urllib.request import urlopen
 
 from playwright.sync_api import sync_playwright
 
-BASE = "https://codenames.nit.ai/pr-preview/pr-14/"
-HEAD = "eb34cc11e28aba93d4bba286f2b79b090f4d820e"
+PR = int(os.environ.get("PREVIEW_PR", "14"))
+BASE = f"https://codenames.nit.ai/pr-preview/pr-{PR}/"
+HEAD = os.environ.get("PREVIEW_HEAD", "eb34cc11e28aba93d4bba286f2b79b090f4d820e")
 
 
 def wait_for_publication():
@@ -17,7 +19,7 @@ def wait_for_publication():
         try:
             with urlopen(BASE + "preview.json", timeout=15) as response:
                 receipt = json.load(response)
-                if receipt == {"pull_request": 14, "head": HEAD}:
+                if receipt == {"pull_request": PR, "head": HEAD}:
                     return
         except (OSError, ValueError):
             pass

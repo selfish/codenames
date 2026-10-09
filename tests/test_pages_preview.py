@@ -50,6 +50,20 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertEqual(manifest["icons"][0]["src"], "icon.png")
         self.assertTrue(all(p.startswith("pr-preview/pr-14/") for p in self.git("diff", "--cached", "--name-only").decode().splitlines()))
 
+    def test_router_preview_preserves_existing_metadata_preview(self):
+        index = self.source / "index.html"
+        index.write_text(index.read_text().replace("pr-14", "pr-18"))
+        self.publish(18, preview.APPROVED[18])
+        self.assertEqual((self.pages / "pr-preview/pr-14/old.js").read_text(), "stale")
+        self.assertEqual((self.pages / "index.html").read_text(), "production")
+        self.assertEqual((self.pages / "CNAME").read_text(), "codenames.nit.ai")
+        self.assertTrue(all(p.startswith("pr-preview/pr-18/") for p in self.git("diff", "--cached", "--name-only").decode().splitlines()))
+
+    def test_router_preview_rejects_a_different_head(self):
+        with self.assertRaises(ValueError):
+            self.publish(18, preview.APPROVED[14])
+        self.assertFalse(self.git("status", "--porcelain").strip())
+
     def test_rejects_other_pr_or_commit(self):
         for number, head in [(99, preview.APPROVED[14]), (14, "0" * 40)]:
             with self.assertRaises(ValueError):
