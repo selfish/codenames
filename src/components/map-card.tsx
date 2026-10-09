@@ -87,6 +87,7 @@ function MapCard() {
                     <div className="grid grid-cols-5 gap-2 bg-slate-900 p-5 rounded-xl border-2 border-slate-700 w-full">
                         {cells.map((cell, i) => (
                             <div
+                                data-testid="map-cell"
                                 className="aspect-square rounded-xl w-full border border-slate-500 transition duration-500"
                                 style={{ backgroundColor: styleMap[cell], aspectRatio: '1 / 1' }}
                                 key={i}></div>

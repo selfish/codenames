@@ -7,15 +7,38 @@ import tseslint from "typescript-eslint";
 
 export default [
   {
-    languageOptions: {
-      globals: globals.browser
-    },
-    rules: {
-      "semi": ["error", "always"]  // Enforces semicolons at the end of statements
-    }
+    ignores: ["build/**"],
   },
-  {languageOptions: { globals: globals.browser }},
+  {
+    settings: {
+      react: {
+        version: "detect",
+      },
+    },
+  },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
   ...fixupConfigRules(pluginReactConfig),
+  {
+    files: ["src/**/*.{js,jsx,ts,tsx}"],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.jest,
+      },
+    },
+    rules: {
+      "react/react-in-jsx-scope": "off",
+      "semi": ["error", "always"],
+    },
+  },
+  {
+    files: ["*.config.js"],
+    languageOptions: {
+      globals: globals.node,
+    },
+    rules: {
+      "semi": ["error", "always"],
+    },
+  },
 ];
