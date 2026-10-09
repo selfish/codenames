@@ -10,13 +10,15 @@ permissions:
 
 jobs:
   build:
-    # Approval is deliberately tied to this exact same-repository candidate.
+    # Approval remains tied to these exact same-repository candidates.
     if: >-
       github.event.pull_request.state == 'open' &&
-      github.event.pull_request.number == 14 &&
       github.event.pull_request.user.login == 'selfish' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.sha == 'eb34cc11e28aba93d4bba286f2b79b090f4d820e'
+      ((github.event.pull_request.number == 14 &&
+      github.event.pull_request.head.sha == 'eb34cc11e28aba93d4bba286f2b79b090f4d820e') ||
+      (github.event.pull_request.number == 18 &&
+      github.event.pull_request.head.sha == 'e95be1cc484bd335c5910528e58aba5628b71d09'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -32,7 +34,7 @@ jobs:
         env:
           CI: true
           GENERATE_SOURCEMAP: false
-          PUBLIC_URL: /pr-preview/pr-14
+          PUBLIC_URL: /pr-preview/pr-${{ github.event.pull_request.number }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: preview-${{ github.run_id }}-${{ github.run_attempt }}
@@ -67,20 +69,22 @@ jobs:
       - name: Validate and stage only the approved preview directory
         env:
           PREVIEW_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: python3 automation/scripts/pages_preview.py candidate pages 14 "$PREVIEW_HEAD"
+          PREVIEW_PR: ${{ github.event.pull_request.number }}
+        run: python3 automation/scripts/pages_preview.py candidate pages "$PREVIEW_PR" "$PREVIEW_HEAD"
       - name: Publish without rewriting branch history
         working-directory: pages
         env:
           PREVIEW_HEAD: ${{ github.event.pull_request.head.sha }}
+          PREVIEW_PR: ${{ github.event.pull_request.number }}
         run: |
           set -eu
-          current_head=$(git ls-remote origin refs/pull/14/head | cut -f1)
+          current_head=$(git ls-remote origin "refs/pull/$PREVIEW_PR/head" | cut -f1)
           test "$current_head" = "$PREVIEW_HEAD"
           if ! git diff --cached --quiet; then
-            git -c user.name=selfish -c user.email=7327741+selfish@users.noreply.github.com commit -m "Publish approved preview for PR 14"
+            git -c user.name=selfish -c user.email=7327741+selfish@users.noreply.github.com commit -m "Publish approved preview for PR $PREVIEW_PR"
             git push origin HEAD:gh-pages
           fi
-          echo 'Preview candidate: https://codenames.nit.ai/pr-preview/pr-14/' >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview candidate: https://codenames.nit.ai/pr-preview/pr-$PREVIEW_PR/" >> "$GITHUB_STEP_SUMMARY"
           echo 'Publication must be verified over HTTPS before reporting the preview as live.' >> "$GITHUB_STEP_SUMMARY"
 
   verify-live:
@@ -96,10 +100,20 @@ jobs:
           persist-credentials: false
       - name: Install isolated browser test dependency
         run: python3 -m pip install --target "$RUNNER_TEMP/preview-browser" playwright==1.56.0
-      - name: Verify public desktop and mobile preview
+      - name: Verify title and icons for PR 14
+        if: github.event.pull_request.number == 14
         env:
           PYTHONPATH: ${{ runner.temp }}/preview-browser
         run: python3 scripts/check_preview.py
+      - name: Compare PR 18 navigation against production
+        if: github.event.pull_request.number == 18
+        env:
+          PYTHONPATH: ${{ runner.temp }}/preview-browser
+          PREVIEW_PR: ${{ github.event.pull_request.number }}
+          PREVIEW_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 -c 'from scripts.check_preview import wait_for_publication; wait_for_publication()'
+          python3 scripts/check_router.py https://codenames.nit.ai/ "https://codenames.nit.ai/pr-preview/pr-$PREVIEW_PR/" router-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: preview-evidence-${{ github.run_id }}-${{ github.run_attempt }}
@@ -107,5 +121,6 @@ jobs:
             preview-evidence.json
             preview-desktop.png
             preview-mobile.png
+            router-evidence/
           if-no-files-found: error
           retention-days: 7
