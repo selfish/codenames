@@ -6,6 +6,7 @@ on:
       - main
     # Preview infrastructure alone must not rebuild or republish production.
     paths-ignore:
+      - '.github/dependabot.yml'
       - '.github/workflows/preview.yml'
       - '.github/workflows/deploy.yml'
       - '.github/workflows/verify.yml'
@@ -23,9 +24,12 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -33,10 +37,12 @@ jobs:
           node-version: '20'  # Set this to the node version you use
 
       - name: Install Dependencies
-        run: npm install --force
+        run: npm ci
 
       - name: Build
         run: npm run build
+        env:
+          CI: true
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4.8.0
