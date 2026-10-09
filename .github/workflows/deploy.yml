@@ -10,6 +10,7 @@ on:
       - '.github/workflows/deploy.yml'
       - '.github/workflows/verify.yml'
       - 'scripts/pages_preview.py'
+      - 'scripts/check_preview.py'
       - 'tests/test_pages_preview.py'
 
 permissions:

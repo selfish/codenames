@@ -82,3 +82,30 @@ jobs:
           fi
           echo 'Preview candidate: https://codenames.nit.ai/pr-preview/pr-14/' >> "$GITHUB_STEP_SUMMARY"
           echo 'Publication must be verified over HTTPS before reporting the preview as live.' >> "$GITHUB_STEP_SUMMARY"
+
+  verify-live:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install isolated browser test dependency
+        run: python3 -m pip install --target "$RUNNER_TEMP/preview-browser" playwright==1.56.0
+      - name: Verify public desktop and mobile preview
+        env:
+          PYTHONPATH: ${{ runner.temp }}/preview-browser
+        run: python3 scripts/check_preview.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: preview-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            preview-evidence.json
+            preview-desktop.png
+            preview-mobile.png
+          if-no-files-found: error
+          retention-days: 7
