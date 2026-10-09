@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import MapCard from './components/map-card';
+import App from './App';
 
 const normalizeColor = color => {
   const style = document.createElement('div').style;
@@ -13,6 +14,45 @@ const countCellsByColor = (cells, color) =>
 afterEach(() => {
   jest.restoreAllMocks();
   jest.useRealTimers();
+  window.history.replaceState(null, '', '/');
+});
+
+test.each(['/', '/?game=sample', '/#', '/#/', '/#/?game=sample', '/#/#section', '/#?game=sample', '/#//', '/#///'])('direct visit to %s renders the map', url => {
+  window.history.replaceState(null, '', url);
+  render(<App />);
+  expect(screen.getByRole('button', { name: 'Randomize' })).toBeEnabled();
+  expect(screen.getAllByTestId('map-cell')).toHaveLength(25);
+});
+
+test.each(['/#missing', '/#/missing', '/#/missing?x=1', '/#/missing#section', '/#/%2F', '/#/%', '/#/.', '/#/..'])('direct visit to %s preserves the not-found fallback', url => {
+  window.history.replaceState(null, '', url);
+  render(<App />);
+  expect(screen.getByRole('heading', { name: 'Unexpected Application Error!' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: '404 Not Found' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Randomize' })).not.toBeInTheDocument();
+});
+
+test('root hash query changes preserve the mounted board and unsupported hashes unmount it', () => {
+  render(<App />);
+  const button = screen.getByRole('button', { name: 'Randomize' });
+  act(() => {
+    window.history.pushState(null, '', '/#/?game=sample');
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  });
+  expect(screen.getByRole('button', { name: 'Randomize' })).toBe(button);
+
+  act(() => {
+    window.history.pushState(null, '', '/#/missing');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  expect(screen.getByRole('heading', { name: '404 Not Found' })).toBeVisible();
+
+  act(() => {
+    window.history.replaceState(null, '', '/#/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  expect(screen.getByRole('button', { name: 'Randomize' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Randomize' })).not.toBe(button);
 });
 
 test('starts with an enabled randomize control', () => {
