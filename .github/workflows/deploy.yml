@@ -14,6 +14,10 @@ on:
       - 'scripts/check_preview.py'
       - 'scripts/check_router.py'
       - 'tests/test_pages_preview.py'
+      - '.github/workflows/action-validation.yml'
+      - 'scripts/check_action_artifact.py'
+      - 'scripts/check_production_build.py'
+      - 'tests/test_production_build.py'
 
 permissions:
   contents: write
@@ -44,6 +48,9 @@ jobs:
         run: npm run build
         env:
           CI: true
+
+      - name: Reject collisions with preserved Pages content
+        run: python3 scripts/check_production_build.py build
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@fa24774553152dd7873cd16ebd8d959b010c5445 # v4.9.0

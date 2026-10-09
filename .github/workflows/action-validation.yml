@@ -1,0 +1,53 @@
+name: Validate action upgrades without publication
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/check_action_artifact.py'
+      - 'scripts/check_production_build.py'
+      - 'tests/test_production_build.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: action-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify GNU rsync preservation and collision guard
+        run: |
+          rsync --version
+          python3 -m unittest discover -s tests -p 'test_production_build.py' -v
+      - run: python3 scripts/check_action_artifact.py create build
+      # Match the preview build upload inputs exactly; only synthetic data.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: preview-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/
+          if-no-files-found: error
+          retention-days: 3
+
+  download:
+    needs: upload
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: preview-${{ github.run_id }}-${{ github.run_attempt }}
+          path: candidate
+      - name: Verify exact paths and SHA-256 hashes after cross-job download
+        run: python3 scripts/check_action_artifact.py verify candidate
