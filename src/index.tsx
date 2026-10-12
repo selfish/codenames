@@ -17,7 +17,7 @@ if (rootElement) {
 
     root.render(
         <React.StrictMode>
-            <div className="font-sans h-screen overflow-y-scroll">
+            <div className="app-root">
                 <RouterProvider router={router}/>
             </div>
         </React.StrictMode>
