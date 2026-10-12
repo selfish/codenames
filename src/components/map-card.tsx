@@ -108,6 +108,7 @@ function MapCard() {
   const generated = useMemo(() => makeGame(seed), [seed]);
   const [cards, setCards] = useState<Card[]>(generated.cards);
   const [spymaster, setSpymaster] = useState(false);
+  const [winner, setWinner] = useState<Team | null>(null);
   const [turn, setTurn] = useState<Team>(generated.startingTeam);
   const [clue, setClue] = useState('');
   const [clueCount, setClueCount] = useState('1');
@@ -126,14 +127,19 @@ function MapCard() {
     blue: cards.filter(card => card.role === 'blue' && !card.revealed).length
   }), [cards]);
 
-  const assassinFound = cards.some(card => card.role === 'assassin' && card.revealed);
-  const winner: Team | null = assassinFound ? (turn === 'red' ? 'blue' : 'red') : remaining.red === 0 ? 'red' : remaining.blue === 0 ? 'blue' : null;
-
   const revealCard = (index: number) => {
     if (cards[index].revealed || winner) return;
     const revealedRole = cards[index].role;
     setCards(current => current.map((card, cardIndex) => cardIndex === index ? { ...card, revealed: true } : card));
-    if (revealedRole === 'assassin') return;
+    // Record the result before any turn or clue bookkeeping can run.
+    if (revealedRole === 'assassin') {
+      setWinner(turn === 'red' ? 'blue' : 'red');
+      return;
+    }
+    if ((revealedRole === 'red' || revealedRole === 'blue') && remaining[revealedRole] === 1) {
+      setWinner(revealedRole);
+      return;
+    }
 
     const turnEnds = revealedRole !== turn || (guessesLeft !== null && guessesLeft <= 1);
     if (turnEnds) {
@@ -146,20 +152,23 @@ function MapCard() {
   };
 
   const endTurn = () => {
+    if (winner) return;
     setTurn(current => current === 'red' ? 'blue' : 'red');
     setClue('');
     setGuessesLeft(null);
   };
 
   const startClue = () => {
-    if (!clue.trim()) return;
-    setGuessesLeft(clueCount === '∞' ? Number.POSITIVE_INFINITY : Number(clueCount) + 1);
+    if (winner || !clue.trim()) return;
+    setGuessesLeft(clueCount === '0' || clueCount === '∞' ? Number.POSITIVE_INFINITY : Number(clueCount) + 1);
   };
 
   const resetGame = (nextSeed: string) => {
     const game = makeGame(nextSeed);
     setSeed(nextSeed);
     setCards(game.cards);
+    setWinner(null);
+    setClueCount('1');
     setTurn(game.startingTeam);
     setSpymaster(false);
     setClue('');
@@ -259,21 +268,21 @@ function MapCard() {
             </div>
             <div className="clue-controls">
               <label className="visually-hidden" htmlFor="clue">Clue word</label>
-              <input id="clue" maxLength={24} value={clue} onChange={event => setClue(event.target.value)} placeholder="Enter clue" />
+              <input id="clue" maxLength={24} value={clue} disabled={Boolean(winner)} onChange={event => { if (!winner) setClue(event.target.value); }} placeholder="Enter clue" />
               <label className="visually-hidden" htmlFor="clue-count">Clue count</label>
-              <select id="clue-count" value={clueCount} onChange={event => setClueCount(event.target.value)} aria-label="Clue count">
+              <select id="clue-count" value={clueCount} disabled={Boolean(winner)} onChange={event => { if (!winner) setClueCount(event.target.value); }} aria-label="Clue count">
                 {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(value => <option key={value}>{value}</option>)}
                 <option value="∞">∞</option>
               </select>
               {guessesLeft === null ? (
-                <button type="button" onClick={startClue} disabled={!clue.trim()}>Start clue</button>
+                <button type="button" onClick={startClue} disabled={Boolean(winner) || !clue.trim()}>Start clue</button>
               ) : (
-                <button type="button" onClick={endTurn}>End turn</button>
+                <button type="button" onClick={endTurn} disabled={Boolean(winner)}>End turn</button>
               )}
             </div>
             {clue.trim() && (
-              <div className="clue-badge" aria-label={guessesLeft === null ? `${clueCount} guesses` : `${guessesLeft === Number.POSITIVE_INFINITY ? 'unlimited' : guessesLeft} guesses remaining`}>
-                {guessesLeft === Number.POSITIVE_INFINITY ? '∞' : guessesLeft ?? clueCount}
+              <div className="clue-badge" aria-live="polite" aria-atomic="true" aria-label={guessesLeft === null ? `${clueCount} guesses` : `${guessesLeft === Number.POSITIVE_INFINITY ? 'unlimited' : guessesLeft} guesses remaining`}>
+                {guessesLeft === Number.POSITIVE_INFINITY ? '∞' : guessesLeft ?? clueCount}{guessesLeft !== null && <span className="guesses-suffix"> left</span>}
               </div>
             )}
           </div>

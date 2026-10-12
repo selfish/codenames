@@ -158,10 +158,10 @@ test('a numbered clue allows one bonus guess, then changes turn and clears the c
   expect(screen.queryByLabelText(/guesses remaining/)).not.toBeInTheDocument();
 });
 
-test('an unlimited clue keeps the turn after multiple correct guesses', () => {
+test.each(['0', '∞'])('a %s clue keeps the turn after multiple correct guesses', count => {
   render(<MapCard />);
   const team = activeTeam();
-  startClue('∞');
+  startClue(count);
   screen.getAllByTestId('map-cell').filter(card => card.dataset.role === team).slice(0, 3)
     .forEach(card => fireEvent.click(card));
 
@@ -172,11 +172,11 @@ test('an unlimited clue keeps the turn after multiple correct guesses', () => {
   expect(screen.getByLabelText('Clue word')).toHaveValue('');
 });
 
-test.each(['neutral', 'opponent'])('%s guess ends an active clue immediately', role => {
+test.each(['3', '0', '∞'].flatMap(count => ['neutral', 'opponent'].map(role => [count, role])))('%s clue ends after a %s guess', (count, role) => {
   render(<MapCard />);
   const team = activeTeam();
   const targetRole = role === 'opponent' ? (team === 'red' ? 'blue' : 'red') : role;
-  startClue('3');
+  startClue(count);
   fireEvent.click(screen.getAllByTestId('map-cell').find(card => card.dataset.role === targetRole));
 
   expect(activeTeam()).not.toBe(team);
@@ -210,4 +210,48 @@ test('new game preserves progress until confirmation, then resets the board, tur
   expect(screen.queryByLabelText(/guesses remaining/)).not.toBeInTheDocument();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
   expect(screen.getByLabelText(`9 ${activeTeam()} agents remaining`)).toBeVisible();
+});
+
+test.each(['assassin', 'final agent'])('%s freezes the result, turn, and clue until reset', ending => {
+  render(<MapCard />);
+  const team = activeTeam();
+  const winner = ending === 'assassin' ? (team === 'red' ? 'blue' : 'red') : team;
+  startClue('∞');
+  const cards = screen.getAllByTestId('map-cell');
+  const targets = cards.filter(card => card.dataset.role === (ending === 'assassin' ? 'assassin' : team));
+  targets.forEach(card => fireEvent.click(card));
+  const endTurn = screen.getByRole('button', { name: 'End turn' });
+  fireEvent.click(endTurn);
+  expect(screen.getByRole('status')).toHaveTextContent(`${winner} team wins!`);
+  expect(activeTeam()).toBe(team);
+  expect(endTurn).toBeDisabled();
+  expect(screen.getByLabelText('Clue word')).toBeDisabled();
+  expect(screen.getByLabelText('Clue count')).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Clue word'), { target: { value: 'Changed' } });
+  fireEvent.change(screen.getByLabelText('Clue count'), { target: { value: '2' } });
+  expect(screen.getByLabelText('Clue word')).toHaveValue('Ocean');
+  expect(screen.getByLabelText('Clue count')).toHaveValue('∞');
+  fireEvent.click(screen.getByRole('button', { name: '+ New game' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Operative view' }));
+  expect(screen.getByRole('status')).toHaveTextContent(`${winner} team wins!`);
+  fireEvent.click(screen.getByRole('button', { name: 'Tap again to confirm' }));
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Clue word')).toBeEnabled();
+  expect(screen.getByLabelText('Clue count')).toHaveValue('1');
+  fireEvent.click(screen.getByRole('button', { name: '+ New game' }));
+  expect(screen.getAllByTestId('map-cell').every(card => !card.disabled)).toBe(true);
+  startClue('1');
+  expect(screen.getByLabelText('2 guesses remaining')).toBeVisible();
+});
+
+test('a game ended without a clue cannot start one afterward', () => {
+  render(<MapCard />);
+  fireEvent.change(screen.getByLabelText('Clue word'), { target: { value: 'Ocean' } });
+  fireEvent.click(screen.getAllByTestId('map-cell').find(card => card.dataset.role === 'assassin'));
+  const result = screen.getByRole('status').textContent;
+  const start = screen.getByRole('button', { name: 'Start clue' });
+  expect(start).toBeDisabled();
+  fireEvent.click(start);
+  expect(screen.queryByRole('button', { name: 'End turn' })).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent(result);
 });
