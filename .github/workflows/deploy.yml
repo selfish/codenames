@@ -3,29 +3,66 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main  # Set this to the branch you want to deploy
+      - main
+    # Preview infrastructure alone must not rebuild or republish production.
+    paths-ignore:
+      - '.github/dependabot.yml'
+      - '.github/workflows/preview.yml'
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/verify.yml'
+      - 'scripts/pages_preview.py'
+      - 'scripts/check_preview.py'
+      - 'scripts/check_router.py'
+      - 'tests/test_pages_preview.py'
+      - '.github/workflows/action-validation.yml'
+      - 'scripts/check_action_artifact.py'
+      - 'scripts/check_production_build.py'
+      - 'tests/test_production_build.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-publication
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'  # Set this to the node version you use
 
       - name: Install Dependencies
-        run: npm install --force
+        run: npm ci
 
       - name: Build
         run: npm run build
+        env:
+          CI: true
+
+      - name: Reject collisions with preserved Pages content
+        run: python3 scripts/check_production_build.py build
 
       - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@4.1.4
+        uses: JamesIves/github-pages-deploy-action@fa24774553152dd7873cd16ebd8d959b010c5445 # v4.9.0
         with:
           branch: gh-pages  # The branch the action should deploy to.
+          clean-exclude: |
+            pr-preview/
+            CNAME
+            .nojekyll
+          force: false
+          git-config-name: selfish
+          git-config-email: 7327741+selfish@users.noreply.github.com
+          commit-message: Publish production build
           folder: build      # The folder the action should deploy.
           token: ${{ secrets.GITHUB_TOKEN }}  # GitHub automatically creates this secret to use in your workflow.
