@@ -9,6 +9,8 @@ import worker from './worker.mjs';
 const execute = promisify(execFile);
 import { SQLiteD1 } from '../scripts/sqlite-d1.mjs';
 for (const language of ['en','he']) test(`persistent Worker ${language}: SQLite CAS races, privacy and fresh-instance recovery`, async t => {
+  let now = 1730000000000;
+  t.mock.method(Date, 'now', () => now);
   const dir = await mkdtemp(join(tmpdir(), 'remzilo-sql-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const file = join(dir, 'rooms.sqlite');
@@ -56,4 +58,6 @@ for (const language of ['en','he']) test(`persistent Worker ${language}: SQLite 
   assert.equal((await call('', null, { name: 'Excess', language })).status, 429);
   await new SQLiteD1(file).prepare("UPDATE request_limits SET hits = 60 WHERE bucket LIKE 'join:%'").bind().run();
   assert.equal((await call(`/${code}/join`, null, { name: 'Excess' })).status, 429);
+  now += 60000;
+  assert.equal((await call(`/${code}/join`, null, { name: 'New window' })).status, 200);
 });
