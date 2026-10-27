@@ -78,6 +78,10 @@ export class Games {
       requireThat(['red', 'blue'].includes(input.team) && ['operative', 'spymaster'].includes(input.role), 'seat');
       requireThat(input.role !== 'spymaster' || !r.players.some(q => q.id !== p.id && q.team === input.team && q.role === 'spymaster'), 'occupied', 409);
       p.team = input.team; p.role = input.role;
+    } else if (type === 'remove') {
+      requireThat(p.id === r.host && r.phase === 'lobby' && input.player !== p.id, 'forbidden', 403);
+      requireThat(r.players.some(q => q.id === input.player), 'player');
+      r.players = r.players.filter(q => q.id !== input.player);
     } else if (type === 'start') {
       requireThat(p.id === r.host && r.phase === 'lobby', 'forbidden', 403);
       requireThat(['red','blue'].every(team => ['operative','spymaster'].every(role => r.players.some(q => q.team === team && q.role === role && this.now() - q.seen <= 30000))), 'needFour');

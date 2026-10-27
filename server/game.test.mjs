@@ -82,8 +82,12 @@ test('unlimited clues, wrong guesses, victory, role locks and host departure', a
   assert.equal(successor.host, successor.me);
   assert.equal((await f.action(1, { type: 'new' })).state.phase, 'lobby');
   assert.equal((await f.state(0)).host, successor.me);
+  assert.equal((await f.action(0, { type: 'remove', player: successor.me })).status, 403);
+  const oldHost = (await f.state(0)).me;
+  assert.equal((await f.action(1, { type: 'remove', player: oldHost })).status, 200);
+  assert.equal((await f.call(`/${f.code}`, f.players[0].token)).status, 401);
   await f.action(1, { type: 'leave' });
-  assert.notEqual((await f.state(0)).host, successor.me);
+  assert.notEqual((await f.state(2)).host, successor.me);
   f.advance(6 * 60 * 60 * 1000 + 1);
   assert.equal((await f.call(`/${f.code}`, f.players[0].token)).status, 404);
 });

@@ -61,3 +61,4 @@ html, body { background: #f3f0e7; color: #233c38; font-family: ui-sans-serif, sy
 .playing .teams { margin-bottom: 8px; }
 .teams summary { cursor: pointer; font-size: 13px; margin-top: 6px; }
 @media(max-width: 480px) { .online-card span { font-size: 10px; } .playing .turn-panel { margin: 10px 0; } .playing .current-clue { font-size: 18px; } }
+.online .remove-player { min-height: 32px; padding: 3px 10px; font-size: 12px; margin-block: 3px; }
