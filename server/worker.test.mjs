@@ -60,4 +60,18 @@ for (const language of ['en','he']) test(`persistent Worker ${language}: SQLite 
   assert.equal((await call(`/${code}/join`, null, { name: 'Excess' })).status, 429);
   now += 60000;
   assert.equal((await call(`/${code}/join`, null, { name: 'New window' })).status, 200);
+  const db = new SQLiteD1(file);
+  await db.prepare(`WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 1005)
+    INSERT INTO request_limits (bucket, window_start, hits) SELECT 'stale-' || x, 0, 1 FROM n`).bind().run();
+  now += 180000;
+  // Invalid requests still trigger housekeeping; no successful room creation.
+  assert.equal((await call('', null, { name: 'a'.repeat(5000), language })).status, 413);
+  const staleCount = async () => (await db.prepare("SELECT COUNT(*) AS count FROM request_limits WHERE bucket LIKE 'stale-%'").bind().first()).count;
+  assert.equal(await staleCount(), 5); // Exactly the bounded 1,000-row batch.
+  await call('/INVALID');
+  assert.equal(await staleCount(), 5); // No second sweep in the same minute.
+  now += 60000;
+  await call('/INVALID');
+  assert.equal(await staleCount(), 0);
+
 });

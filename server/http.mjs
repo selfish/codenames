@@ -25,9 +25,17 @@ export function createServer({ games = new Games(), build = resolve('build') } =
         let body = {};
         if (req.method === 'POST') {
           if (!req.headers['content-type']?.startsWith('application/json')) throw new Fault('contentType', 415);
-          let raw = '';
-          for await (const chunk of req) { raw += chunk; if (raw.length > 4096) throw new Fault('tooLarge', 413); }
-          try { body = JSON.parse(raw); } catch { throw new Fault('json'); }
+          const chunks = [];
+          let bytes = 0;
+          for await (const chunk of req) {
+            bytes += chunk.length;
+            if (bytes > 4096) throw new Fault('tooLarge', 413);
+            chunks.push(chunk);
+          }
+          // A TCP/HTTP chunk may end inside a Hebrew UTF-8 character.
+          // Decode once, after enforcing the wire-byte limit.
+          try { body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, bytes))); }
+          catch { throw new Fault('json'); }
           if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Fault('json');
         }
         if (url.pathname === '/api/rooms' && req.method === 'POST') return json(201, games.create(body.language, body.name));

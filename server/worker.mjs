@@ -21,6 +21,18 @@ export async function transact(db, code, operation) {
   throw new Fault('stale', 409);
 }
 
+async function cleanupQuotas(db) {
+  const window = Math.floor(Date.now() / 60000);
+  // One indexed singleton claim per minute, even when all requests are invalid.
+  // Competing isolates cannot each run a sweep. Each sweep deletes <= 1,000 rows.
+  const claimed = await db.prepare(`INSERT INTO request_limit_maintenance (id, next_window) VALUES (1, ?)
+    ON CONFLICT(id) DO UPDATE SET next_window = excluded.next_window
+    WHERE request_limit_maintenance.next_window <= ? RETURNING id`).bind(window + 1, window).first();
+  if (claimed) await db.prepare(`DELETE FROM request_limits WHERE bucket IN (
+    SELECT bucket FROM request_limits WHERE window_start < ? ORDER BY window_start LIMIT 1000
+  )`).bind(window - 2).run();
+}
+
 async function limit(db, request, kind, maximum) {
   // Cloudflare supplies this header at the trusted edge. Other hosts must strip
   // visitor-supplied copies or provide their own trusted address adapter.
@@ -74,12 +86,12 @@ export default {
       if (!env.DB) throw new Fault('storageUnavailable', 503);
       const origin = request.headers.get('Origin');
       if (origin && origin !== url.origin) throw new Fault('origin', 403);
+      await cleanupQuotas(env.DB);
       await limit(env.DB, request, 'all', 3600);
       if (request.method === 'POST' && url.pathname === '/api/rooms') await limit(env.DB, request, 'create', 10);
       if (request.method === 'POST' && url.pathname.endsWith('/join')) await limit(env.DB, request, 'join', 60);
       const body = request.method === 'POST' ? await readBody(request) : {};
       if (url.pathname === '/api/rooms' && request.method === 'POST') {
-        await env.DB.prepare('DELETE FROM request_limits WHERE window_start < ?').bind(Math.floor(Date.now() / 60000) - 2).run();
         await env.DB.prepare('DELETE FROM rooms WHERE touched < ?').bind(Date.now() - TTL).run();
         const games = new Games();
         const result = games.create(body.language, body.name);

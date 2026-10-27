@@ -100,3 +100,39 @@ test('HTTP validation and origin boundary', async t => {
   assert.equal((await f.call(`/${f.code}/action`, f.players[0].token, { type: 'start', version: -1 })).status, 409);
   assert.equal((await f.call('/DEADBEEF00', f.players[0].token)).status, 404);
 });
+
+test('Node HTTP preserves split Hebrew UTF-8 and limits wire bytes', async t => {
+  const { request } = await import('node:http');
+  const server = createServer();
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const post = chunks => new Promise((resolve, reject) => {
+    const req = request({ hostname: '127.0.0.1', port: server.address().port, path: '/api/rooms', method: 'POST', headers: { 'Content-Type': 'application/json' } }, res => {
+      const response = [];
+      res.on('data', chunk => response.push(chunk));
+      res.on('end', () => resolve({ status: res.statusCode, ...JSON.parse(Buffer.concat(response).toString('utf8')) }));
+    });
+    req.on('error', reject);
+    let index = 0;
+    const send = () => {
+      if (index === chunks.length) { req.end(); return; }
+      req.write(chunks[index++]);
+      setTimeout(send, 5);
+    };
+    send();
+  });
+  const name = 'שלום עולם';
+  const raw = Buffer.from(JSON.stringify({ language: 'he', name }));
+  const start = raw.indexOf(Buffer.from('ש'));
+  const result = await post([raw.subarray(0, start + 1), raw.subarray(start + 1, start + 3), raw.subarray(start + 3)]);
+  assert.equal(result.status, 201);
+  assert.equal(result.state.players[0].name, name);
+  // Fewer than 4,096 JS characters, but more than 4,096 UTF-8 bytes.
+  assert.equal((await post([Buffer.from(JSON.stringify({ language: 'he', name: 'א'.repeat(3000) }))])).status, 413);
+  const input = { language: 'he', name, padding: '' };
+  input.padding = 'x'.repeat(4096 - Buffer.byteLength(JSON.stringify(input)));
+  const exact = Buffer.from(JSON.stringify(input));
+  assert.equal(exact.length, 4096);
+  assert.equal((await post([exact])).status, 201);
+  assert.equal((await post([Buffer.concat([exact, Buffer.from(' ')])])).status, 413);
+});
