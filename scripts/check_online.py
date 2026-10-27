@@ -55,7 +55,7 @@ with sync_playwright() as p:
             role = ('Clue guide' if language == 'en' else 'מדריך/ת רמזים') if i % 2 == 0 else ('Finder' if language == 'en' else 'מנחש/ת')
             page.locator(team).get_by_role('button', name=role, exact=True).click()
             page.locator(team).get_by_role('button', name=role, exact=True).wait_for()
-            page.wait_for_function("document.querySelector('button[aria-pressed=true]') !== null")
+            page.locator('button[aria-pressed=true]').wait_for()
         start = pages[0].get_by_role('button', name='Start game' if language == 'en' else 'התחלת משחק', exact=True)
         start.click()
         for page in pages:
