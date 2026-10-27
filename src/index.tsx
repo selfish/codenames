@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import { createHashRouter, RouterProvider, } from "react-router-dom";
-import MapCard from "./components/map-card";
+import MapCard from "./components/online-game";
 import reportWebVitals from "./reportWebVitals";
 
 const router = createHashRouter([
