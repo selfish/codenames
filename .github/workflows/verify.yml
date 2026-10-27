@@ -51,7 +51,10 @@ jobs:
       - name: Install isolated browser tools
         run: |
           python3 -m pip install --target "$RUNNER_TEMP/online-browser" playwright==1.56.0
-          PYTHONPATH="$RUNNER_TEMP/online-browser" python3 -m playwright install --with-deps chromium
+          # Reuse the runner browser, as the existing hosted-preview checks do.
+          if ! command -v google-chrome >/dev/null && ! command -v chromium >/dev/null; then
+            PYTHONPATH="$RUNNER_TEMP/online-browser" python3 -m playwright install --with-deps chromium
+          fi
 
       - name: Four-phone multiplayer browser checks
         env:

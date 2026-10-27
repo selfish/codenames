@@ -1,6 +1,7 @@
 """Four isolated phone browsers against the real Node authority; no mocked state."""
 import json
 import os
+import shutil
 import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -26,7 +27,7 @@ def api(page, action=None):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(executable_path=os.environ.get('CHROMIUM_PATH') or ('/usr/bin/chromium' if Path('/usr/bin/chromium').exists() else None), args=['--no-sandbox'])
+    browser = p.chromium.launch(executable_path=os.environ.get('CHROMIUM_PATH') or shutil.which('google-chrome') or shutil.which('chromium'), args=['--no-sandbox'])
     evidence = []
     for language in ['en', 'he']:
         contexts = [browser.new_context(viewport={'width': w, 'height': 844}, is_mobile=True, has_touch=True) for w in [320, 360, 390, 412]]
