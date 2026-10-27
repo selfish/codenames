@@ -7,6 +7,7 @@ const assets = {};
 const types = { '.html':'text/html; charset=utf-8', '.js':'text/javascript', '.css':'text/css', '.json':'application/json', '.svg':'image/svg+xml', '.png':'image/png', '.ico':'image/x-icon', '.txt':'text/plain' };
 async function collect(dir, prefix = '') {
   for (const item of await readdir(dir, { withFileTypes: true })) {
+    if (prefix === '' && !['index.html', 'manifest.json', 'remzilo.svg', 'static'].includes(item.name)) continue;
     if (item.isDirectory()) await collect(resolve(dir,item.name), `${prefix}/${item.name}`);
     else if (item.isFile() && !item.name.endsWith('.map')) assets[`${prefix}/${item.name}`] = { type: types[extname(item.name)] || 'application/octet-stream', data: (await readFile(resolve(dir,item.name))).toString('base64') };
   }
