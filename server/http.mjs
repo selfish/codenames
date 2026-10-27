@@ -18,8 +18,10 @@ export function createServer({ games = new Games(), build = resolve('build') } =
         const now = Date.now();
         if (rates.size > 10000) for (const [key, value] of rates) if (now - value.start > 60000) rates.delete(key);
         let rate = rates.get(address);
-        if (!rate || now - rate.start > 60000) { rate = { start: now, count: 0 }; rates.set(address, rate); }
+        if (!rate || now - rate.start > 60000) { rate = { start: now, count: 0, creates: 0, joins: 0 }; rates.set(address, rate); }
         if (++rate.count > 3600) throw new Fault('rate', 429);
+        if (req.method === 'POST' && url.pathname === '/api/rooms' && ++rate.creates > 10) throw new Fault('rate', 429);
+        if (req.method === 'POST' && url.pathname.endsWith('/join') && ++rate.joins > 60) throw new Fault('rate', 429);
         let body = {};
         if (req.method === 'POST') {
           if (!req.headers['content-type']?.startsWith('application/json')) throw new Fault('contentType', 415);

@@ -39,9 +39,9 @@ No merge or production rollout is authorized. A hosted preview, actual-phone rev
 
 ## Persistent Worker adapter (implemented)
 
-`server/game.mjs` uses standard Web Crypto and a JSON vocabulary import, with no Node-specific imports. The same engine runs in the Node transport and `server/worker.mjs`. The Worker accepts a D1-compatible `DB` binding and stores rooms, player credentials and hidden cards only in trusted SQL storage. Browser state remains role-filtered.
+`server/game.mjs` uses standard Web Crypto and a plain ESM vocabulary import, with no Node-specific imports. The same engine runs in the Node transport and `server/worker.mjs`. The Worker accepts a D1-compatible `DB` binding and stores rooms, player credentials and hidden cards only in trusted SQL storage. Browser state remains role-filtered.
 
-`server/migrations/0001_rooms.sql` is the schema-only first migration. Apply it via the approved host's migration workflow, never in a request handler. Each room row has an internal storage revision separate from the public game revision. Every mutation (including heartbeat/host transfer) performs a conditional `UPDATE ... WHERE revision = ?`; failed comparisons re-read and revalidate. A competing move invalidates the original action version, preventing duplicate execution. No isolate-local room map is authoritative in this adapter. Rooms survive process/isolate replacement and expire after six idle hours. The 200-room/24-player limits remain. Public production abuse protection and operating cost limits still need review; the Worker does not currently impose a distributed per-IP quota.
+`server/migrations/0001_rooms.sql` creates rooms; `0002_request_limits.sql` adds request quotas. Both are schema-only migrations. Apply it via the approved host's migration workflow, never in a request handler. Each room row has an internal storage revision separate from the public game revision. Every mutation (including heartbeat/host transfer) performs a conditional `UPDATE ... WHERE revision = ?`; failed comparisons re-read and revalidate. A competing move invalidates the original action version, preventing duplicate execution. No isolate-local room map is authoritative in this adapter. Rooms survive process/isolate replacement and expire after six idle hours. The 200-room/24-player limits remain. Both transports bound requests to 3,600/minute per source, with additional 10/minute create and 60/minute join limits. Worker quotas use atomic SQL upserts and hashed edge-provided addresses; raw addresses are not stored. Stale quota rows are cleaned during creation. Non-Cloudflare deployments must supply a trusted source-address adapter rather than accepting visitor-provided CF-Connecting-IP headers. Production operating costs, distributed abuse and monitoring still need review.
 
 ```
 npm run build
@@ -50,7 +50,7 @@ node scripts/preview_worker.mjs /tmp/remzilo-worker/index.mjs /tmp/remzilo-worke
 GAME_URL=http://127.0.0.1:3002 python3 scripts/check_online.py
 ```
 
-The exporter embeds this candidate's build assets and engine in a standalone Worker ESM module, plus a separate schema SQL file. It does not create any service, credentials, database or hostname. The local preview adapter uses Python's SQLite and Node solely to exercise the Worker contract. It is test tooling, not a cloud runtime dependency.
+The exporter embeds this candidate's build assets and engine in a standalone Worker ESM module, plus separate schema SQL files. It does not create any service, credentials, database or hostname. The local preview adapter uses Python's SQLite and Node solely to exercise the Worker contract. It is test tooling, not a cloud runtime dependency.
 
 Sites reference instructions are accessible, including Worker ESM and D1. No Sites helper installation was found in this execution environment; the hosting owner must package the exported Worker using the supported helper/manifest and migration conventions. No Site identity/manifest has been invented. The user's custom-domain condition must be met before any publication; proposed hosting is not authorization for DNS edits.
 

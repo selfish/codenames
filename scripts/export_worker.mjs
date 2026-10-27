@@ -14,10 +14,12 @@ async function collect(dir, prefix = '') {
 }
 await collect(root);
 let game = await readFile('server/game.mjs', 'utf8');
-game = game.replace("import words from './words.json' with { type: 'json' };", `const words = ${await readFile('server/words.json','utf8')};`).replaceAll('export class ', 'class ');
+game = game.replace("import words from './words.mjs';", `const words = ${(await readFile('server/words.mjs','utf8')).replace('export default ', '')};`).replaceAll('export class ', 'class ');
 let worker = await readFile('server/worker.mjs', 'utf8');
 worker = worker.replace("import { Games, Fault } from './game.mjs';", '').replace('export async function transact', 'async function transact');
 await mkdir(output, { recursive: true });
 await writeFile(resolve(output,'index.mjs'), `globalThis.REMZILO_ASSETS = ${JSON.stringify(assets)};\n${game}\n${worker}`);
-await writeFile(resolve(output,'0001_rooms.sql'), await readFile('server/migrations/0001_rooms.sql'));
+for (const name of (await readdir('server/migrations')).filter(name => name.endsWith('.sql')).sort()) {
+  await writeFile(resolve(output,name), await readFile(resolve('server/migrations',name)));
+}
 console.log(`Worker and schema exported to ${output}; no resources created or published.`);

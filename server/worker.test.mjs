@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
@@ -12,7 +12,7 @@ for (const language of ['en','he']) test(`persistent Worker ${language}: SQLite 
   const dir = await mkdtemp(join(tmpdir(), 'remzilo-sql-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const file = join(dir, 'rooms.sqlite');
-  const migration = await readFile(new URL('./migrations/0001_rooms.sql', import.meta.url), 'utf8');
+  const migration = (await Promise.all((await readdir('server/migrations')).filter(n => n.endsWith('.sql')).sort().map(n => readFile(`server/migrations/${n}`, 'utf8')))).join('\n');
   await execute('python3', ['-c', 'import sqlite3,sys; sqlite3.connect(sys.argv[1]).executescript(sys.argv[2])', file, migration]);
   const call = async (path, token, body) => {
     // A fresh binding facade on every request models isolate/process replacement.
@@ -51,4 +51,9 @@ for (const language of ['en','he']) test(`persistent Worker ${language}: SQLite 
   assert.equal((await state(1)).cards.filter(c => c.revealed).length,0);
   const row = await new SQLiteD1(file).prepare('SELECT revision FROM rooms WHERE code = ?').bind(code).first();
   assert.ok(row.revision > restored.version);
+  assert.equal((await call('', null, { name: 'a'.repeat(5000), language })).status, 413);
+  await new SQLiteD1(file).prepare("UPDATE request_limits SET hits = 10 WHERE bucket LIKE 'create:%'").bind().run();
+  assert.equal((await call('', null, { name: 'Excess', language })).status, 429);
+  await new SQLiteD1(file).prepare("UPDATE request_limits SET hits = 60 WHERE bucket LIKE 'join:%'").bind().run();
+  assert.equal((await call(`/${code}/join`, null, { name: 'Excess' })).status, 429);
 });

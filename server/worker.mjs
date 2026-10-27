@@ -21,15 +21,30 @@ export async function transact(db, code, operation) {
   throw new Fault('stale', 409);
 }
 
+async function limit(db, request, kind, maximum) {
+  // Cloudflare supplies this header at the trusted edge. Other hosts must strip
+  // visitor-supplied copies or provide their own trusted address adapter.
+  const address = request.headers.get('CF-Connecting-IP') || 'local-shared';
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(address));
+  const hash = [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2,'0')).join('');
+  const window = Math.floor(Date.now() / 60000);
+  const allowed = await db.prepare(`INSERT INTO request_limits (bucket, window_start, hits) VALUES (?, ?, 1)
+    ON CONFLICT(bucket) DO UPDATE SET
+      hits = CASE WHEN request_limits.window_start = excluded.window_start THEN request_limits.hits + 1 ELSE 1 END,
+      window_start = excluded.window_start
+    WHERE request_limits.window_start != excluded.window_start OR request_limits.hits < ?
+    RETURNING hits`).bind(`${kind}:${hash}`, window, maximum).first();
+  if (!allowed) throw new Fault('rate', 429);
+}
+
 async function readBody(request) {
   if (!request.headers.get('Content-Type')?.startsWith('application/json')) throw new Fault('contentType', 415);
   const reader = request.body?.getReader();
   if (!reader) throw new Fault('json');
   let bytes = 0;
   const chunks = [];
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
+  for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+    const { value } = chunk;
     bytes += value.byteLength;
     if (bytes > 4096) { await reader.cancel(); throw new Fault('tooLarge', 413); }
     chunks.push(value);
@@ -59,8 +74,12 @@ export default {
       if (!env.DB) throw new Fault('storageUnavailable', 503);
       const origin = request.headers.get('Origin');
       if (origin && origin !== url.origin) throw new Fault('origin', 403);
+      await limit(env.DB, request, 'all', 3600);
+      if (request.method === 'POST' && url.pathname === '/api/rooms') await limit(env.DB, request, 'create', 10);
+      if (request.method === 'POST' && url.pathname.endsWith('/join')) await limit(env.DB, request, 'join', 60);
       const body = request.method === 'POST' ? await readBody(request) : {};
       if (url.pathname === '/api/rooms' && request.method === 'POST') {
+        await env.DB.prepare('DELETE FROM request_limits WHERE window_start < ?').bind(Math.floor(Date.now() / 60000) - 2).run();
         await env.DB.prepare('DELETE FROM rooms WHERE touched < ?').bind(Date.now() - TTL).run();
         const games = new Games();
         const result = games.create(body.language, body.name);

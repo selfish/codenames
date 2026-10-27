@@ -1,6 +1,6 @@
 // Exercise the exported Worker locally, including its real SQL persistence boundary.
 import http from 'node:http';
-import { readFile, access } from 'node:fs/promises';
+import { readFile, readdir, access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -8,7 +8,7 @@ import { SQLiteD1 } from './sqlite-d1.mjs';
 const artifact = resolve(process.argv[2] || '/tmp/remzilo-worker/index.mjs');
 const database = resolve(process.argv[3] || '/tmp/remzilo-worker/preview.sqlite');
 try { await access(database); } catch {
-  execFileSync('python3', ['-c', 'import sqlite3,sys; sqlite3.connect(sys.argv[1]).executescript(sys.argv[2])', database, await readFile('server/migrations/0001_rooms.sql','utf8')]);
+  execFileSync('python3', ['-c', 'import sqlite3,sys; sqlite3.connect(sys.argv[1]).executescript(sys.argv[2])', database, (await Promise.all((await readdir('server/migrations')).filter(n => n.endsWith('.sql')).sort().map(n => readFile(`server/migrations/${n}`, 'utf8')))).join('\n')]);
 }
 const worker = (await import(pathToFileURL(artifact))).default;
 const DB = new SQLiteD1(database);
