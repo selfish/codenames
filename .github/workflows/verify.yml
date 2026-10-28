@@ -68,4 +68,5 @@ jobs:
             if curl --fail --silent http://127.0.0.1:3002/ > /dev/null; then break; fi
             sleep 1
           done
+          GAME_URL=http://127.0.0.1:3002 python3 scripts/check_cards.py
           GAME_URL=http://127.0.0.1:3002 python3 scripts/check_online.py

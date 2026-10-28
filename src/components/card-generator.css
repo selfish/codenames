@@ -1,0 +1,18 @@
+.mode-navigation { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.cards-only { max-width: 640px; }
+.cards-only .online-header h1 { font-size: 30px; }
+.card-views { display: flex; gap: 10px; margin-top: 16px; }
+.card-status { min-height: 30px; text-align: center; font-weight: 750; font-size: 22px; }
+.key-frame { position: relative; border: 3px solid; border-radius: 16px; padding: 22px; background: #0f172a; }
+.starting-marker { position: absolute; width: 30%; height: 10px; top: -6px; left: 35%; border: 2px solid #334155; border-radius: 6px; }
+.generator-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; }
+.generator-cell { aspect-ratio: 1; min-width: 0; border: 1px solid #64748b; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.key-cell { color: white; font-size: clamp(18px,5vw,36px); text-shadow: 0 1px 3px black; }
+.word-cell { color: #233c38; font-weight: 750; font-size: clamp(9px,2.3vw,17px); padding: 2px; overflow-wrap: anywhere; text-align: center; }
+.online .randomize-card { display: block; width: 100%; margin: 20px 0 12px; border-radius: 12px; background: #155b4e; color: white; font-size: 22px; }
+.key-legend { text-align: center; }
+@media(max-width: 400px) { .key-frame { padding: 14px; } .generator-grid { gap: 5px; } .generator-cell { border-radius: 7px; } }
+
+.marker-bottom { top: auto; bottom: -6px; }
+.marker-left, .marker-right { width: 10px; height: 30%; top: 35%; left: -6px; }
+.marker-right { left: auto; right: -6px; }

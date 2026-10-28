@@ -14,7 +14,7 @@ async function collect(dir, prefix = '') {
 }
 await collect(root);
 let game = await readFile('server/game.mjs', 'utf8');
-game = game.replace("import words from './words.mjs';", `const words = ${(await readFile('server/words.mjs','utf8')).replace('export default ', '')};`).replaceAll('export class ', 'class ');
+game = game.replace("import words from '../src/data/words.mjs';", `const words = ${(await readFile('src/data/words.mjs','utf8')).replace('export default ', '')};`).replaceAll('export class ', 'class ');
 let worker = await readFile('server/worker.mjs', 'utf8');
 worker = worker.replace("import { Games, Fault } from './game.mjs';", '').replace('export async function transact', 'async function transact');
 await mkdir(output, { recursive: true });

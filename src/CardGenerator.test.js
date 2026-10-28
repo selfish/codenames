@@ -1,0 +1,138 @@
+import React from 'react';
+import { act, fireEvent, render, screen, within, cleanup } from '@testing-library/react';
+import GameEntry from './components/game-entry';
+
+const originalFetch = globalThis.fetch;
+const timeoutDescriptor = Object.getOwnPropertyDescriptor(AbortSignal, 'timeout');
+beforeEach(() => {
+  jest.useFakeTimers();
+  localStorage.clear();
+  globalThis.fetch = jest.fn(() => Promise.reject(new Error('Offline')));
+  window.matchMedia = jest.fn(() => ({ matches: false }));
+  Object.defineProperty(AbortSignal, 'timeout', { configurable: true, value: () => new AbortController().signal });
+  history.replaceState(null, '', '/?mode=cards&lang=en');
+});
+afterEach(() => {
+  cleanup();
+  jest.clearAllTimers();
+  jest.useRealTimers();
+  globalThis.fetch = originalFetch;
+  if (timeoutDescriptor) Object.defineProperty(AbortSignal, 'timeout', timeoutDescriptor);
+  else delete AbortSignal.timeout;
+});
+const cells = () => [...document.querySelectorAll('.generator-cell')];
+function randomize(label = 'Randomize') {
+  fireEvent.click(screen.getByRole('button', { name: label }));
+  act(() => jest.advanceTimersByTime(2300));
+}
+test('original key-only workflow generates locally, guards duplicate taps, and keeps the 9/8/7/1 distribution', () => {
+  render(<GameEntry />);
+  expect(cells()).toHaveLength(25);
+  expect(screen.getByRole('status')).toHaveTextContent('Randomize to generate a card');
+  expect(cells().every(cell => !cell.dataset.role)).toBe(true);
+  expect(screen.queryByLabelText('Your name')).not.toBeInTheDocument();
+  const button = screen.getByRole('button', { name: 'Randomize' });
+  fireEvent.click(button);
+  expect(button).toBeDisabled();
+  fireEvent.click(button);
+  act(() => jest.advanceTimersByTime(2299));
+  expect(button).toBeDisabled();
+  act(() => jest.advanceTimersByTime(1));
+  expect(button).toBeEnabled();
+  const counts = {};
+  cells().forEach(cell => { counts[cell.dataset.role] = (counts[cell.dataset.role] || 0) + 1; });
+  expect([counts.red, counts.blue].sort()).toEqual([8,9]);
+  expect(counts.neutral).toBe(7);
+  expect(counts.black).toBe(1);
+  expect(screen.getByRole('status')).toHaveTextContent(counts.red === 9 ? 'Red starts' : 'Blue starts');
+  expect(cells().every(cell => cell.getAttribute('aria-label').startsWith('Row'))).toBe(true);
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+  expect(localStorage.length).toBe(0);
+});
+test('word cards reuse the same local deal across views and regenerate without a server', () => {
+  render(<GameEntry />);
+  randomize();
+  const key = cells().map(cell => cell.dataset.role);
+  fireEvent.click(screen.getByRole('button', { name: 'Word cards', exact: true }));
+  const words = cells().map(cell => cell.textContent);
+  expect(new Set(words).size).toBe(25);
+  expect(words.every(word => /^[A-Z]+$/.test(word))).toBe(true);
+  expect(cells().every(cell => !cell.dataset.role)).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Key card', exact: true }));
+  expect(cells().map(cell => cell.dataset.role)).toEqual(key);
+  fireEvent.click(screen.getByRole('button', { name: 'Word cards', exact: true }));
+  expect(cells().map(cell => cell.textContent)).toEqual(words);
+  randomize();
+  expect(cells().map(cell => cell.textContent)).not.toEqual(words);
+  expect(new Set(cells().map(cell => cell.textContent)).size).toBe(25);
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+});
+test('Hebrew generation sets RTL while preserving physical key orientation; language changes clear the old deal', () => {
+  render(<GameEntry />);
+  randomize();
+  fireEvent.change(screen.getByLabelText('Language / שפה'), { target: { value: 'he' } });
+  expect(document.documentElement.lang).toBe('he');
+  expect(screen.getByRole('main')).toHaveAttribute('dir', 'rtl');
+  expect(screen.getByRole('status')).toHaveTextContent('ערבבו');
+  expect(cells().every(cell => !cell.dataset.role)).toBe(true);
+  randomize('ערבוב מחדש');
+  expect(screen.getByRole('group', { name: 'כרטיס שנוצר' })).toHaveAttribute('dir', 'ltr');
+  fireEvent.click(screen.getByRole('button', { name: 'כרטיסי מילים', exact: true }));
+  expect(cells().every(cell => /[א-ת]/.test(cell.textContent))).toBe(true);
+  expect(new Set(cells().map(cell => cell.textContent)).size).toBe(25);
+  expect(location.search).toContain('lang=he');
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+});
+test('reduced motion generates immediately; leaving during a shuffle cancels it', () => {
+  window.matchMedia = jest.fn(() => ({ matches: true }));
+  render(<GameEntry />);
+  fireEvent.click(screen.getByRole('button', { name: 'Randomize' }));
+  expect(screen.getByRole('button', { name: 'Randomize' })).toBeEnabled();
+  expect(cells().every(cell => cell.dataset.role)).toBe(true);
+  window.matchMedia = jest.fn(() => ({ matches: false }));
+  fireEvent.click(screen.getByRole('button', { name: 'Randomize' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Online rooms', exact: true }));
+  act(() => jest.advanceTimersByTime(3000));
+  expect(screen.getByLabelText('Your name')).toBeInTheDocument();
+  expect(document.querySelector('.generator-grid')).not.toBeInTheDocument();
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+});
+test('both modes are discoverable without a room and switching keeps language', () => {
+  history.replaceState(null, '', '/?lang=en');
+  render(<GameEntry />);
+  const navigation = screen.getByRole('navigation', { name: 'Play mode' });
+  fireEvent.click(within(navigation).getByRole('button', { name: 'Card generator — no room needed' }));
+  expect(location.search).toContain('mode=cards');
+  expect(screen.getByRole('button', { name: 'Randomize' })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Language / שפה'), { target: { value: 'he' } });
+  fireEvent.click(screen.getByRole('button', { name: 'משחק אונליין', exact: true }));
+  expect(screen.getByLabelText('השם שלך')).toBeInTheDocument();
+  expect(location.search).not.toContain('mode=cards');
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+});
+test('room invitations take precedence over a card-mode flag and do not expose any local key', async () => {
+  history.replaceState(null, '', '/?room=ABCDEF1234&mode=cards&lang=en');
+  localStorage.setItem('room:ABCDEF1234', 'rejoin-token');
+  const state = { code: 'ABCDEF1234', language: 'en', version: 1, phase: 'lobby', host: 'me', me: 'me', players: [{ id: 'me', name: 'Guest', team: null, role: 'operative', online: true }], cards: [], remaining: { red: 0, blue: 0 } };
+  globalThis.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ state }) }));
+  render(<GameEntry />);
+  await act(async () => {});
+  expect(screen.getByRole('heading', { name: 'Choose your team and role' })).toBeInTheDocument();
+  expect(document.querySelector('.generator-grid')).not.toBeInTheDocument();
+  expect(globalThis.fetch).toHaveBeenCalledWith('/api/rooms/ABCDEF1234', expect.objectContaining({ headers: { Authorization: 'Bearer rejoin-token' } }));
+  expect(screen.queryByRole('button', { name: 'Card generator — no room needed' })).not.toBeInTheDocument();
+});
+test('returning from card mode can create a separate authoritative room', async () => {
+  render(<GameEntry />);
+  randomize();
+  fireEvent.click(screen.getByRole('button', { name: 'Online rooms', exact: true }));
+  const state = { code: 'ABCDEF1234', language: 'en', version: 1, phase: 'lobby', host: 'me', me: 'me', players: [{ id: 'me', name: 'Guest', team: null, role: 'operative', online: true }], cards: [], remaining: { red: 0, blue: 0 } };
+  globalThis.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ token: 'new-token', state }) }));
+  fireEvent.change(screen.getByLabelText('Your name'), { target: { value: 'Guest' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create room', exact: true }));
+  await act(async () => {});
+  expect(globalThis.fetch).toHaveBeenCalledWith('/api/rooms', expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Guest', language: 'en' }) }));
+  expect(location.search).toBe('?room=ABCDEF1234');
+  expect(localStorage.getItem('room:ABCDEF1234')).toBe('new-token');
+  expect(screen.getByRole('heading', { name: 'Choose your team and role' })).toBeInTheDocument();
+});

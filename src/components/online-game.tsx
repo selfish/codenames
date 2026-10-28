@@ -20,8 +20,8 @@ async function request(path: string, token?: string, body?: object) {
   if (!response.ok) throw new Error(result.error || 'error');
   return result;
 }
-export default function OnlineGame() {
-  const [language, setLanguage] = useState<Language>('he');
+export default function OnlineGame({ onCards }: { onCards?: (language: Language) => void }) {
+  const [language, setLanguage] = useState<Language>(() => new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'he');
   const [session, setSession] = useState<Session | null>(initialSession);
   const [state, setState] = useState<State | null>(null);
   const [name, setName] = useState('');
@@ -96,6 +96,7 @@ export default function OnlineGame() {
   const disabled = busy || !connected;
   return <main className={`game-shell online ${state && state.phase !== 'lobby' ? 'playing' : ''}`} dir={(state?.language || language) === 'he' ? 'rtl' : 'ltr'}>
     <header className="online-header"><div><h1><span className="brand-mark" aria-hidden="true">⌁</span> {t.title}</h1><p>{t.subtitle}</p></div>{!session && <select aria-label="Language / שפה" value={language} onChange={e => setLanguage(e.target.value as Language)}><option value="he">עברית</option><option value="en">English</option></select>}</header>
+    {!session && onCards && <nav className="mode-navigation" aria-label={language === 'he' ? 'מצב משחק' : 'Play mode'}><strong>{language === 'he' ? 'משחק אונליין' : 'Online rooms'}</strong><button onClick={() => onCards(language)}>{language === 'he' ? 'מחולל כרטיסים — ללא חדר' : 'Card generator — no room needed'}</button></nav>}
     <details className="how-to"><summary>{t.how}</summary><p>{t.rules}</p></details>
     {error && <p role="alert">{t[error as keyof typeof t] || t.error}</p>}
     {!session ? <section className="entry panel">

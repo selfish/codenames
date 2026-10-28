@@ -25,4 +25,6 @@ npm run test:server
 python3 scripts/check_online.py
 ```
 
-No merge, public preview publication or production rollout has been approved for this candidate.
+This follow-on adds a standalone card generator at `/?mode=cards&lang=he` (or `lang=en`), reachable from the online entry screen. See [card-only behavior, isolation, tests and review boundary](docs/card-only-mode.md).
+
+This branch does not update the live multiplayer preview. No merge, production routing change or deployment is authorized by this follow-on.

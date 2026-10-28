@@ -1,4 +1,4 @@
-import words from './words.mjs';
+import words from '../src/data/words.mjs';
 const randomBytes = size => ({ toString: () => [...crypto.getRandomValues(new Uint8Array(size))].map(v => v.toString(16).padStart(2, '0')).join('') });
 const randomInt = max => {
   const limit = Math.floor(0x100000000 / max) * max;
