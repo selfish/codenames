@@ -40,7 +40,32 @@ jobs:
       - name: Test
         run: npm run test:ci
 
+      - name: Multiplayer authority tests
+        run: npm run test:server
+
       - name: Build
         run: npm run build
         env:
           CI: true
+
+      - name: Install isolated browser tools
+        run: |
+          python3 -m pip install --target "$RUNNER_TEMP/online-browser" playwright==1.56.0
+          # Reuse the runner browser, as the existing hosted-preview checks do.
+          if ! command -v google-chrome >/dev/null && ! command -v chromium >/dev/null; then
+            PYTHONPATH="$RUNNER_TEMP/online-browser" python3 -m playwright install --with-deps chromium
+          fi
+
+      - name: Four-phone multiplayer browser checks
+        env:
+          PYTHONPATH: ${{ runner.temp }}/online-browser
+        run: |
+          node scripts/export_worker.mjs build "$RUNNER_TEMP/remzilo-worker"
+          node scripts/preview_worker.mjs "$RUNNER_TEMP/remzilo-worker/index.mjs" "$RUNNER_TEMP/remzilo-worker/preview.sqlite" > "$RUNNER_TEMP/online-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3002/ > /dev/null; then break; fi
+            sleep 1
+          done
+          GAME_URL=http://127.0.0.1:3002 python3 scripts/check_online.py

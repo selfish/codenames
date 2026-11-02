@@ -16,6 +16,7 @@ export default [
       },
     },
   },
+  { files: ["server/**/*.mjs", "scripts/*.mjs"], languageOptions: { globals: globals.node } },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
   ...fixupConfigRules(pluginReactConfig),

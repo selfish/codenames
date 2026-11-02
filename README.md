@@ -1,23 +1,28 @@
-# Codenames Random Map Card Generator
+# Remzilo / רמזילו — online candidate
 
-### https://codenames.nit.ai
+A Hebrew and English team word game for four or more phones. Working name pending review; repository and domain names are unchanged.
 
-### `npm start`
+This branch continues the interactive-board work in PR12 with authoritative rooms, private guide views, synchronized turns and reconnect recovery. It includes a runnable single-process local server and a persistent Worker/SQL adapter, not a production deployment.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+The default local server stores rooms in memory; the Worker adapter persists them with revision-checked SQL updates.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
-
-## Verification
-
-Use Node 20, matching the GitHub Actions build and deployment workflows:
+See [architecture, run instructions, hosting approval boundary and limitations](docs/online-game.md).
 
 ```sh
 npm ci
+npm run build
+npm run serve
+```
+
+Open http://127.0.0.1:3001, create a room, and share its link. Two teams each need a clue guide and a finder. Static hosting alone cannot run this game.
+
+```sh
 npm run lint
 npm run typecheck
 npm run test:ci
-CI=true npm run build
+npm run test:server
+# With the Node server running and Python Playwright + Chromium installed:
+python3 scripts/check_online.py
 ```
+
+No merge, public preview publication or production rollout has been approved for this candidate.
