@@ -64,7 +64,7 @@ async function readBody(request) {
   const raw = new Uint8Array(bytes); let offset = 0;
   for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.length; }
   let input;
-  try { input = JSON.parse(new TextDecoder().decode(raw)); } catch { throw new Fault('json'); }
+  try { input = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)); } catch { throw new Fault('json'); }
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Fault('json');
   return input;
 }

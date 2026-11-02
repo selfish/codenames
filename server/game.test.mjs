@@ -135,4 +135,11 @@ test('Node HTTP preserves split Hebrew UTF-8 and limits wire bytes', async t => 
   assert.equal(exact.length, 4096);
   assert.equal((await post([exact])).status, 201);
   assert.equal((await post([Buffer.concat([exact, Buffer.from(' ')])])).status, 413);
+  for (const bytes of [[0xff], [0xe2, 0x82], [0xc0, 0xaf]]) {
+    const invalid = Buffer.concat([Buffer.from('{"language":"he","name":"'), Buffer.from(bytes), Buffer.from('"}')]);
+    assert.deepEqual(await post([invalid]), { status: 400, error: 'json' });
+  }
+  const replacement = await post([Buffer.from(JSON.stringify({ language: 'he', name: 'Valid \uFFFD' }))]);
+  assert.equal(replacement.status, 201);
+  assert.equal(replacement.state.players[0].name, 'Valid \uFFFD');
 });

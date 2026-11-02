@@ -8,6 +8,44 @@ import { promisify } from 'node:util';
 import worker from './worker.mjs';
 const execute = promisify(execFile);
 import { SQLiteD1 } from '../scripts/sqlite-d1.mjs';
+
+test('Worker rejects malformed UTF-8 without creating rooms, preserving valid split text and byte limits', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'remzilo-utf8-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = join(dir, 'rooms.sqlite');
+  const migration = (await Promise.all((await readdir('server/migrations')).filter(n => n.endsWith('.sql')).sort().map(n => readFile(`server/migrations/${n}`, 'utf8')))).join('\n');
+  await execute('python3', ['-c', 'import sqlite3,sys; sqlite3.connect(sys.argv[1]).executescript(sys.argv[2])', file, migration]);
+  const db = new SQLiteD1(file);
+  const post = async chunks => {
+    const body = new ReadableStream({ start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      controller.close();
+    } });
+    const response = await worker.fetch(new Request('https://preview.example/api/rooms', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body, duplex: 'half'
+    }), { DB: db });
+    return { status: response.status, ...await response.json() };
+  };
+  // Invalid byte, incomplete sequence and overlong encoding inside valid JSON syntax.
+  for (const bytes of [[0xff], [0xe2, 0x82], [0xc0, 0xaf]]) {
+    const raw = Buffer.concat([Buffer.from('{"language":"he","name":"'), Buffer.from(bytes), Buffer.from('"}')]);
+    assert.deepEqual(await post([raw]), { status: 400, error: 'json' });
+  }
+  assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM rooms').bind().first()).count, 0);
+  for (const name of ['שלום עולם', 'Valid \uFFFD']) {
+    const raw = Buffer.from(JSON.stringify({ language: 'he', name }));
+    const result = await post(Array.from(raw, (_, i) => raw.subarray(i, i + 1)));
+    assert.equal(result.status, 201);
+    assert.equal(result.state.players[0].name, name);
+  }
+  const input = { language: 'he', name: 'שלום', padding: '' };
+  input.padding = 'x'.repeat(4096 - Buffer.byteLength(JSON.stringify(input)));
+  const exact = Buffer.from(JSON.stringify(input));
+  assert.equal(exact.length, 4096);
+  assert.equal((await post([exact])).status, 201);
+  assert.equal((await post([exact, Buffer.from(' ')])).status, 413);
+  assert.equal((await post([Buffer.from(JSON.stringify({ language: 'he', name: 'א'.repeat(3000) }))])).status, 413);
+});
 for (const language of ['en','he']) test(`persistent Worker ${language}: SQLite CAS races, privacy and fresh-instance recovery`, async t => {
   let now = 1730000000000;
   t.mock.method(Date, 'now', () => now);
