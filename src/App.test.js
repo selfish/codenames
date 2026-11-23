@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import MapCard from './components/map-card';
 
 const normalizeColor = color => {
@@ -15,10 +15,12 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-test('starts with an enabled randomize control', () => {
+test('exposes the map and enabled randomize control inside one main landmark', () => {
   render(<MapCard />);
 
-  expect(screen.getByRole('button', { name: 'Randomize' })).toBeEnabled();
+  const main = screen.getByRole('main');
+  expect(within(main).getAllByTestId('map-cell')).toHaveLength(25);
+  expect(within(main).getByRole('button', { name: 'Randomize' })).toBeEnabled();
 });
 
 test('generates a valid 25-cell map and announces the starting team', async () => {

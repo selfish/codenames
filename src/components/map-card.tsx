@@ -71,7 +71,7 @@ function MapCard() {
     };
 
     return (
-        <div className="w-full h-screen py-12 flex items-center justify-center text-[#dc4347]">
+        <main className="w-full h-screen py-12 flex items-center justify-center text-[#dc4347]">
             <div className="grid gap-5 w-full max-w-xl mx-auto p-5 items-center"
                  style={{ height: 'calc(100vh - 24px)' }}>
                 <h1 className="text-center text-4xl bold transition duration-1000" style={{
@@ -101,7 +101,7 @@ function MapCard() {
                     Randomize
                 </button>
             </div>
-        </div>
+        </main>
     );
 
 
